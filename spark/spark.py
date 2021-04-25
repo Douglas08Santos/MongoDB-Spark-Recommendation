@@ -1,23 +1,26 @@
 '''
-usage: spark-submit --packages org.mongodb.spark:mongo-spark-connector_2.12:3.0.1 spark.py
+usage: spark-submit --packages org.mongodb.spark:mongo-spark-connector_2.12:3.0.1 spark.py <db_name>
 '''
 
 from pyspark.sql import SparkSession
 from pyspark.ml.recommendation import ALS
 from pyspark.sql.functions import explode
+import sys
 
 
 if __name__ == '__main__':
 
+    db_name = sys.argv[1]
     # Create SparkSession
+    print('Init spark.py...')
     spark = SparkSession.builder.appName(
         'MongoSpark'
         ).config(
             "spark.mongodb.input.uri", 
-            "mongodb://localhost:27017/Movielens-100k"
+            "mongodb://localhost:27017/{}".format(db_name)
         ).config(
             "spark.mongodb.output.uri",
-            "mongodb://localhost:27017/Movielens-100k"
+            "mongodb://localhost:27017/{}".format(db_name)
         ).getOrCreate()
 
     spark.sparkContext.getConf().getAll()
@@ -27,7 +30,7 @@ if __name__ == '__main__':
     moviesdf = spark.read.format(
         "com.mongodb.spark.sql.DefaultSource"
     ).option(
-        "uri","mongodb://127.0.0.1/Movielens-100k.movies"
+        "uri","mongodb://127.0.0.1:27017/{}.movies".format(db_name)
     ).load()
     # Print Schema DataFrame Movies
     print('Schema dataframe movie...')
@@ -40,7 +43,7 @@ if __name__ == '__main__':
     ratingsdf = spark.read.format(
         "com.mongodb.spark.sql.DefaultSource"
     ).option(
-        "uri","mongodb://127.0.0.1/Movielens-100k.ratings"
+        "uri","mongodb://127.0.0.1:27017/{}.ratings".format(db_name)
     ).load()
     # Print Schema Dataframe Ratings
     print('Schema dataframe rating...')
@@ -50,7 +53,7 @@ if __name__ == '__main__':
     ratingsdf.show(10)
 
     # Train a collaborative filter model from existing ratings
-    print('Create collaborative filter')
+    print('Create collaborative filter...')
     als = ALS(
         maxIter=10,regParam=0.5,
         userCol='userid', itemCol='movieid',
@@ -61,12 +64,12 @@ if __name__ == '__main__':
     alsmodel = als.fit(train)   
 
     # Predict Ratings(optional)
-    print('Calculate predictions')
+    print('Calculate predictions...')
     prediction = alsmodel.transform(test)
     #Recommeder movies - 5 movies per users
-    print('Recommender 5 movies per users')
+    print('Recommender 5 movies per users...')
     recommeder_movie = alsmodel.recommendForAllUsers(5)
-    print('Print Schema recommender movie')
+    print('Print Schema recommender movie...')
     recommeder_movie.printSchema()
     '''
         recommender_movie
@@ -76,17 +79,16 @@ if __name__ == '__main__':
         |    |    |-- movieid: integer (nullable = true)
         |    |    |-- rating: float (nullable = true)
     '''
-    print('Show 10 recommendation')
+    print('Show 10 recommendation...')
     recommeder_movie.show(10, False)
     
-    #Configure output to save mongoDB
-    
-    print('Explode array recommendations')
+    #Configure output to save mongoDB    
+    print('Explode array recommendations...')
     explode_recom = recommeder_movie.select(
         recommeder_movie.userid,
         explode(recommeder_movie.recommendations)
     )
-    print('Schema dataframe after exploding array')
+    print('Schema dataframe after exploding array...')
     explode_recom.printSchema()
     '''
         |-- userid: integer (nullable = false)
@@ -96,7 +98,7 @@ if __name__ == '__main__':
     '''
     explode_recom.show()
 
-    print('Explode struct data')
+    print('Explode struct data...')
     struct_explode = explode_recom.select('col.*', '*')
     struct_explode.printSchema()
     '''
@@ -107,17 +109,17 @@ if __name__ == '__main__':
         |    |-- movieid: integer (nullable = true)
         |    |-- rating: float (nullable = true)
     '''
-    print('Drop column struct_explode.col')
+    print('Drop column struct_explode.col...')
     output = struct_explode.drop(struct_explode.col)
-    print('Print schema output')
+    print('Print schema output...')
     output.printSchema()
-    print('Print dataframe output')
+    print('Print dataframe output...')
     output.show(10)
 
     print('Make output with title movies')
     # Join Dataframes output and movie by column movieid
     print('Joining dataframes output and movie by movieid...')
-    print('Drop [movies.movieid, moviesdf._id] in joined dataframe')
+    print('Drop [movies.movieid, moviesdf._id] in joined dataframe...')
     output_with_title = output.join(
         moviesdf,
         moviesdf.movieid == output.movieid
@@ -126,19 +128,19 @@ if __name__ == '__main__':
     ).drop(
         moviesdf._id
     )
-    print('Print schema output with title')
+    print('Print schema output with title...')
     output_with_title.printSchema()
-    print('Print joined dataframes')
+    print('Print joined dataframes...')
     output_with_title.show(10)
 
     #Save mongoDB outputs
-    print('Save output in mongoDB')
+    print('Save output in mongoDB...')
     output.write.format(
         'com.mongodb.spark.sql.DefaultSource'
         ).mode(
             'append'
         ).option(
-            'uri',"mongodb://127.0.0.1/Movielens-100k.recommendations"
+            'uri',"mongodb://127.0.0.1:27017/{}.recommendations".format(db_name)
         ).save()
     
     output_with_title.write.format(
@@ -146,10 +148,6 @@ if __name__ == '__main__':
         ).mode(
             'append'
         ).option(
-            'uri',"mongodb://127.0.0.1/Movielens-100k.recommendationstitle"
+            'uri',"mongodb://127.0.0.1:27017/{}.recommendationstitle".format(db_name)
         ).save()
 
-    
-
-    # Create MongoDB output Configuration
-    print('0')

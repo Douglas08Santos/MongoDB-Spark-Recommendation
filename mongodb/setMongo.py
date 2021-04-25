@@ -1,14 +1,17 @@
 '''
-Classe importar os arquivos .dat e/ou csv para o mongoDB
+Salvar os arquivos .dat e/ou csv para o mongoDB
 
 usage: python setmongo.py <name_db> <file movies> <file ratings>
-    + nome do banco de dados criado no mongo para salva os documento
+    + nome do banco de dados criado no mongo para salva os documento(ver OBS)
     + <movies file>
-        + (.dat/.csv)
+        + formatação requerida(.dat/.csv)
             + MovieID::Title::Genres / movieId,title,genres
     + <ratings file>
-       + (.dat/.csv)
+       + formatação requerida(.dat/.csv)
             + UserID::MovieID::Rating::Timestamp / userId,movieId,rating,timestamp
+
+Obs: Considerando que o mongoDB está rodando em localhost:27017
+    db = MongoClient('localhost', 27017)[sys.argv[1]]
 '''
 
 from pymongo import MongoClient, ASCENDING, DESCENDING
@@ -16,6 +19,10 @@ from datetime import datetime
 import pandas as pd
 import sys, re
 
+'''
+    Após os filmes serem adicionado no mongoDB, 
+    essa função contabiliza a quantidade de filmes por genero
+'''    
 def create_genres(db):
     docs = list(db.movies.aggregate([
         {'$unwind' : '$genres'},
@@ -30,7 +37,10 @@ def create_genres(db):
         for idx, doc in enumerate(docs)
     ]
     db.command('insert', 'genres', documents=genres, ordered=False)
-
+'''
+    Responsavel por adicionar ao banco de dados os filmes 
+    do arquivo no formato .dat
+'''
 def insert_movies_dat(db, file):
     # REGEX responsavel por capturar os dados do movies.dat
     #(?P<name>regex)
@@ -62,7 +72,10 @@ def insert_movies_dat(db, file):
     #Insere o restante, já que ele adicionava de 2000 em 2000        
     db.command('insert', 'movies', documents=movies, ordered=False)
     print(count, 'movies inserted')
-
+'''
+    Responsavel por adicionar ao banco de dados as avaliações 
+    do arquivo no formato .dat
+'''
 def insert_ratings_dat(db, file):
     #UserID::MovieID::Rating::Timestamp
     regex = re.compile("(?P<userid>[0-9]+)::(?P<movieid>[0-9]+)::(?P<rating>.*?)::(?P<ts>.*?)\n")
@@ -119,7 +132,10 @@ def insert_ratings_dat(db, file):
     print(count, 'ratings inserted')
     ratings, movies, users = [], [], []
 
-# Ler arquivos em .csv
+'''
+    Responsavel por adicionar ao banco de dados os filmes 
+    do arquivo no formato .csv
+'''
 def insert_movies_csv(db, file):
     # movieId,title,genres
     #Regex usado caso o nome do filme tenha aspas
@@ -153,6 +169,10 @@ def insert_movies_csv(db, file):
     db.command('insert', 'movies', documents=movies, ordered=False)
     print(count, 'movies inserted')
 
+'''
+    Responsavel por adicionar ao banco de dados os filmes 
+    do arquivo no formato .csv
+'''
 def insert_ratings_csv(db, file):
     # userId,movieId,rating,timestamp
     regex = re.compile("(?P<userid>[0-9]+),(?P<movieid>[0-9]+),(?P<rating>.*?),(?P<ts>.*?)\n")
